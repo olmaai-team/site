@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Чат-бот</title>
+    <style>
+        :root {
+            --primary-color: #808080;
+            --bg-color: #212121;
+            --chat-bg:#212121;
+            --user-msg-bg: #212121;
+            --bot-msg-bg: #212121;
+            --text-color: #ffffff;
+            --border-color: #303030;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background-color: var(--primary-color);
+            color: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .menu-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .bot-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .bot-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+
+        .new-chat-btn {
+            background-color: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .new-chat-btn:hover {
+            background-color: rgba(255,255,255,0.3);
+        }
+
+        /* Main layout */
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background-color: var(--chat-bg);
+            border-right: 1px solid var(--border-color);
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            position: absolute;
+            height: 100%;
+            z-index: 10;
+        }
+
+        .sidebar.open {
+            transform: translateX(0);
+        }
+
+        .history-section, .settings-section {
+            padding: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .history-title, .settings-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .history-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            padding: 8px 10px;
+            border-radius: 5px;
+            margin-bottom: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .history-item:hover {
+            background-color: var(--bot-msg-bg);
+        }
+
+        .settings-option {
+            margin-bottom: 15px;
+        }
+
+        .settings-option label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .color-picker {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+        }
+
+        .color-option {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+
+        .color-option.active {
+            border-color: var(--text-color);
+        }
+
+        select {
+            width: 100%;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+        }
+
+        /* Chat area */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 10px 15px;
+            border-radius: 18px;
+            position: relative;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .user-message {
+            align-self: flex-end;
+            background-color: var(--primary-color);
+            border-bottom-right-radius: 5px;
+        }
+
+        .bot-message {
+            align-self: flex-start;
+            background-color: var(--bot-msg-bg);
+            border-bottom-left-radius: 5px;
+        }
+
+        .message-sender {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .typing-indicator {
+            display: inline-block;
+            position: relative;
+            width: 60px;
+            height: 20px;
+        }
+
+        .typing-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--text-color);
+            position: absolute;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+
+        .typing-dot:nth-child(1) {
+            left: 0;
+            animation-delay: 0s;
+        }
+
+        .typing-dot:nth-child(2) {
+            left: 15px;
+            animation-delay: 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            left: 30px;
+            animation-delay: 0.4s;
+        }
+
+        /* Input area */
+        .input-area {
+            display: flex;
+            padding: 15px;
+            border-top: 1px solid var(--border-color);
+            background-color: var(--chat-bg);
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            outline: none;
+            resize: none;
+            max-height: 120px;
+            background-color: #303030;
+            color: #666666;
+        }
+
+         .send-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            margin-left: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s;
+        }
+
+        .send-btn:hover {
+            background-color: #666;
+        }
+
+        .send-btn:disabled {
+            background-color: var(--primary-color);
+            cursor: not-allowed;
+        }
+
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-5px); }
+        }
+
+        /* Overlay for mobile */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 5;
+            display: none;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+
+        /* Responsive */
+        @media (min-width: 768px) {
+            .sidebar {
+                position: static;
+                transform: translateX(0);
+            }
+
+            .menu-btn {
+                display: none;
+            }
+
+            .overlay {
+                display: none !important;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .message {
+                max-width: 90%;
+            }
+
+            .sidebar {
+                width: 80%;
+            }
+        }
+        .select{
+            background-color: #303030;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <button class="menu-btn">☰</button>
+        <div class="bot-info">
+            <div class="bot-avatar">OAI</div>
+            <span>OlmaGPT</span>
+        </div>
+        <button class="new-chat-btn">Новый чат</button>
+    </div>
+
+    <div class="container">
+        <div class="sidebar">
+            <div class="history-section">
+                <div class="history-title">
+                    <span>История чатов</span>
+                </div>
+                <div class="history-list">
+                    <div class="history-item">Обсуждение программирования</div>
+                    <div class="history-item">Вопросы о науке</div>
+                    <div class="history-item">Идеи для проектов</div>
+                </div>
+            </div>
+            <div class="settings-section">
+                <div class="settings-title">Настройки</div>
+                <div class="settings-option">
+                    <label>Персонализация</label>
+                    <div class="color-picker">
+                        <div class="color-option active" style="background-color: #808080;" data-color="#808080"></div>
+                        <div class="color-option" style="background-color: #2196F3;" data-color="#2196F3"></div>
+                        <div class="color-option" style="background-color: #4CAF50;" data-color="#4CAF50"></div>
+                        <div class="color-option" style="background-color: #FF9800;" data-color="#FF9800"></div>
+                        <div class="color-option" style="background-color: #9C27B0;" data-color="#9C27B0"></div>
+                    </div>
+                </div>
+                <div class="settings-option">
+                    <label for="model-select">Модель</label>
+                    <select class="select" id="model-select">
+                        <option value="openai/gpt-oss-20b:free">OlmaX</option>
+                        <option value="deepseek/deepseek-r1-distill-llama-70b:free">OlmaCore</option>
+                        <option value="google/gemma-3-27b-it:free">OlmaAI</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="overlay"></div>
+
+        <div class="chat-area">
+            <div class="chat-messages">
+                <div class="message bot-message">
+                    <div class="message-sender">OlmaGPT</div>
+                    Привет! Я помощник OlmaGPT. Чем могу помочь?
+                </div>
+            </div>
+            <div class="input-area">
+                <textarea class="message-input" placeholder="Введите сообщение..." rows="1"></textarea>
+                <button class="send-btn" disabled>➤</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM элементы
+        const menuBtn = document.querySelector('.menu-btn');
+        const sidebar = document.querySelector('.sidebar');
+        const overlay = document.querySelector('.overlay');
+        const newChatBtn = document.querySelector('.new-chat-btn');
+        const messageInput = document.querySelector('.message-input');
+        const sendBtn = document.querySelector('.send-btn');
+        const chatMessages = document.querySelector('.chat-messages');
+        const colorOptions = document.querySelectorAll('.color-option');
+        const modelSelect = document.getElementById('model-select');
+
+        // API ключ и модели
+        const API_KEY = "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";
+        const MODELS = {
+            "openai/gpt-oss-20b:free": "OlmaX",
+            "deepseek/deepseek-r1-distill-llama-70b:free": "OlmaCore",
+            "google/gemma-3-27b-it:free": "OlmaAI"
+        };
+
+        // Переменные состояния
+        let currentChatHistory = [];
+        let isBotTyping = false;
+
+        // Открытие/закрытие меню
+        menuBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+        });
+
+        overlay.addEventListener('click', () => {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+        });
+
+        // Автоматическое изменение высоты textarea
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+
+            // Активация/деактивация кнопки отправки
+            sendBtn.disabled = this.value.trim() === '';
+        });
+
+        // Отправка сообщения по нажатию Enter
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!sendBtn.disabled) {
+                    sendMessage();
+                }
+            }
+        });
+
+        // Отправка сообщения по клику на кнопку
+        sendBtn.addEventListener('click', sendMessage);
+
+        // Создание нового чата
+        newChatBtn.addEventListener('click', () => {
+            chatMessages.innerHTML = '';
+            currentChatHistory = [];
+            addMessage('OlmaGPT', 'Привет! Я ваш AI помощник. Чем могу помочь?', 'bot');
+        });
+
+        // Смена цвета темы
+        colorOptions.forEach(option => {
+            option.addEventListener('click', function() {
+                // Убираем активный класс у всех опций
+                colorOptions.forEach(opt => opt.classList.remove('active'));
+                // Добавляем активный класс к выбранной опции
+                this.classList.add('active');
+                // Меняем основной цвет
+                document.documentElement.style.setProperty('--primary-color', this.dataset.color);
+            });
+        });
+
+        // Функция отправки сообщения
+        function sendMessage() {
+            const messageText = messageInput.value.trim();
+            if (!messageText) return;
+
+            // Добавляем сообщение пользователя в чат
+            addMessage('Вы', messageText, 'user');
+
+            // Очищаем поле ввода
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+            sendBtn.disabled = true;
+
+            // Показываем индикатор набора текста
+            showTypingIndicator();
+
+            // Сохраняем сообщение в историю
+            currentChatHistory.push({ role: 'user', content: messageText });
+
+            // Отправляем запрос к API
+            sendToAI(messageText);
+        }
+
+        // Функция добавления сообщения в чат
+        function addMessage(sender, text, type) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message', `${type}-message`);
+
+            const senderElement = document.createElement('div');
+            senderElement.classList.add('message-sender');
+            senderElement.textContent = sender;
+
+            const textElement = document.createElement('div');
+            textElement.textContent = text;
+
+            messageElement.appendChild(senderElement);
+            messageElement.appendChild(textElement);
+
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Функция показа индикатора набора текста
+        function showTypingIndicator() {
+            if (isBotTyping) return;
+
+            isBotTyping = true;
+
+            const typingElement = document.createElement('div');
+            typingElement.classList.add('message', 'bot-message');
+            typingElement.id = 'typing-indicator';
+
+            const senderElement = document.createElement('div');
+            senderElement.classList.add('message-sender');
+            senderElement.textContent = 'OlmaGPT';
+
+            const typingDots = document.createElement('div');
+            typingDots.classList.add('typing-indicator');
+
+            for (let i = 0; i < 3; i++) {
+                const dot = document.createElement('div');
+                dot.classList.add('typing-dot');
+                typingDots.appendChild(dot);
+            }
+
+            typingElement.appendChild(senderElement);
+            typingElement.appendChild(typingDots);
+
+            chatMessages.appendChild(typingElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Функция скрытия индикатора набора текста
+        function hideTypingIndicator() {
+            const typingIndicator = document.getElementById('typing-indicator');
+            if (typingIndicator) {
+                typingIndicator.remove();
+            }
+            isBotTyping = false;
+        }
+
+        // Функция отправки запроса к AI
+        async function sendToAI(message) {
+            const selectedModel = modelSelect.value;
+
+            try {
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_KEY}`,
+                        'HTTP-Referer': window.location.origin,
+                        'X-Title': 'AI Chat Bot'
+                    },
+                    body: JSON.stringify({
+                        model: selectedModel,
+                        messages: [
+                            ...currentChatHistory,
+                            { role: 'user', content: message }
+                        ],
+                        max_tokens: 1000,
+                        temperature: 0.7
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Ошибка API: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                hideTypingIndicator();
+
+                if (data.choices && data.choices.length > 0) {
+                    const aiResponse = data.choices[0].message.content;
+
+                    // Добавляем ответ в чат с эффектом печати
+                    typeMessage('OlmaGPT', aiResponse);
+
+                    // Сохраняем ответ в историю
+                    currentChatHistory.push({ role: 'assistant', content: aiResponse });
+                } else {
+                    throw new Error('Некорректный ответ от API');
+                }
+
+            } catch (error) {
+                hideTypingIndicator();
+                console.error('Ошибка при обращении к API:', error);
+
+                // Показываем пользователю понятное сообщение об ошибке
+                let errorMessage = 'Извините, произошла ошибка при обращении к AI. ';
+
+                if (error.message.includes('429')) {
+                    errorMessage += 'Превышен лимит запросов. Попробуйте позже.';
+                } else if (error.message.includes('401')) {
+                    errorMessage += 'Проблема с авторизацией. Проверьте API ключ.';
+                } else if (error.message.includes('500')) {
+                    errorMessage += 'Внутренняя ошибка сервера. Попробуйте позже.';
+                } else {
+                    errorMessage += 'Пожалуйста, попробуйте еще раз.';
+                }
+
+                addMessage('OlmaGPT', errorMessage, 'bot');
+            }
+        }
+
+        // Функция для эффекта печати сообщения
+        function typeMessage(sender, text) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message', 'bot-message');
+
+            const senderElement = document.createElement('div');
+            senderElement.classList.add('message-sender');
+            senderElement.textContent = sender;
+
+            const textElement = document.createElement('div');
+            textElement.textContent = '';
+
+            messageElement.appendChild(senderElement);
+            messageElement.appendChild(textElement);
+
+            chatMessages.appendChild(messageElement);
+
+            let index = 0;
+            const typingSpeed = 30; // мс между символами
+
+            function typeCharacter() {
+                if (index < text.length) {
+                    textElement.textContent += text.charAt(index);
+                    index++;
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                    setTimeout(typeCharacter, typingSpeed);
+                }
+            }
+
+            typeCharacter();
+        }
+
+        // Инициализация
+        window.addEventListener('DOMContentLoaded', () => {
+            // Добавляем первое сообщение от бота, если чат пустой
+            if (chatMessages.children.length === 0) {
+                addMessage('OlmaGPTOlmaGPT', 'Привет! Я ваш AI помощник. Чем могу помочь?', 'bot');
+            }
+        });
+    </script>
+</body>
+</html>
