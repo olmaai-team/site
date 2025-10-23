@@ -214,6 +214,56 @@
             margin-bottom: 5px;
         }
 
+        .message-text {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            line-height: 1.4;
+        }
+
+        .message-footer {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 8px;
+            padding-top: 5px;
+        }
+
+        .copy-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            opacity: 0.6;
+            transition: opacity 0.2s, background-color 0.2s;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .copy-btn:hover {
+            opacity: 1;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .copy-btn.copied {
+            opacity: 1;
+        }
+
+        .copy-btn.copied::after {
+            content: '✓';
+            color: #4CAF50;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .copy-icon {
+            width: 16px;
+            height: 16px;
+            filter: invert(1);
+        }
+
         .typing-indicator {
             display: inline-block;
             position: relative;
@@ -279,6 +329,7 @@
             align-items: center;
             justify-content: center;
             transition: background-color 0.3s;
+            font-size: 18px;
         }
 
         .send-btn:hover {
@@ -288,8 +339,16 @@
         .send-btn:disabled {
             background-color: var(--primary-color);
             cursor: not-allowed;
+            opacity: 0.5;
         }
 
+        .stop-btn {
+            background-color: #ff4444 !important;
+        }
+
+        .stop-btn:hover {
+            background-color: #cc0000 !important;
+        }
 
         /* Animations */
         @keyframes fadeIn {
@@ -410,7 +469,12 @@
         <div class="chat-messages">
             <div class="message bot-message">
                 <div class="message-sender">OlmaGPT</div>
-                Привет! Я помощник OlmaGPT. Чем могу помочь?
+                <div class="message-text">Привет! Я помощник OlmaGPT. Чем могу помочь?</div>
+                <div class="message-footer">
+                    <button class="copy-btn" title="Копировать">
+                        <img src="https://img.icons8.com/material-rounded/24/FFFFFF/copy.png" alt="Копировать" class="copy-icon">
+                    </button>
+                </div>
             </div>
         </div>
         <div class="input-area">
@@ -470,6 +534,9 @@
     // Переменные состояния
     let currentChatHistory = [];
     let isBotTyping = false;
+    let isGenerating = false;
+    let currentTypingAnimation = null;
+    let currentResponseText = '';
 
     // Открытие/закрытие меню
     menuBtn.addEventListener('click', () => {
@@ -488,24 +555,36 @@
         this.style.height = (this.scrollHeight) + 'px';
 
         // Активация/деактивация кнопки отправки
-        sendBtn.disabled = this.value.trim() === '';
+        sendBtn.disabled = this.value.trim() === '' || isGenerating;
     });
 
     // Отправка сообщения по нажатию Enter
     messageInput.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            if (!sendBtn.disabled) {
+            if (!sendBtn.disabled && !isGenerating) {
                 sendMessage();
             }
         }
     });
 
     // Отправка сообщения по клику на кнопку
-    sendBtn.addEventListener('click', sendMessage);
+    sendBtn.addEventListener('click', function() {
+        if (isGenerating) {
+            // Если идет генерация, останавливаем ее
+            stopGeneration();
+        } else {
+            // Если не идет генерация, отправляем сообщение
+            sendMessage();
+        }
+    });
 
     // Создание нового чата
     newChatBtn.addEventListener('click', () => {
+        // Если идет генерация, останавливаем ее
+        if (isGenerating) {
+            stopGeneration();
+        }
         chatMessages.innerHTML = '';
         currentChatHistory = [];
         addMessage('OlmaGPT', 'Привет! Я ваш AI помощник. Чем могу помочь?', 'bot');
@@ -523,10 +602,83 @@
         });
     });
 
+    // Функция копирования текста
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            console.log('Текст скопирован в буфер обмена');
+        }).catch(err => {
+            console.error('Ошибка копирования: ', err);
+            // Fallback для старых браузеров
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+        });
+    }
+
+    // Функция форматирования текста с переносами
+    function formatText(text) {
+        // Разбиваем текст на строки примерно по 80 символов
+        const maxLineLength = 80;
+        let result = '';
+        let currentLine = '';
+
+        const words = text.split(' ');
+
+        for (const word of words) {
+            if ((currentLine + word).length > maxLineLength) {
+                if (currentLine.length > 0) {
+                    result += currentLine + '\n';
+                    currentLine = word + ' ';
+                } else {
+                    // Если слово само по себе длиннее maxLineLength, разбиваем его
+                    if (word.length > maxLineLength) {
+                        const chunks = word.match(new RegExp(`.{1,${maxLineLength}}`, 'g'));
+                        result += chunks.join('\n') + ' ';
+                    } else {
+                        result += word + ' ';
+                    }
+                }
+            } else {
+                currentLine += word + ' ';
+            }
+        }
+
+        result += currentLine;
+        return result.trim();
+    }
+
+    // Функция остановки генерации
+    function stopGeneration() {
+        if (currentTypingAnimation) {
+            clearTimeout(currentTypingAnimation);
+            currentTypingAnimation = null;
+        }
+
+        isGenerating = false;
+        isBotTyping = false;
+
+        // Возвращаем кнопку в исходное состояние
+        sendBtn.textContent = '➤';
+        sendBtn.classList.remove('stop-btn');
+        sendBtn.disabled = messageInput.value.trim() === '';
+
+        // Убираем индикатор набора
+        hideTypingIndicator();
+
+        // Если есть недопечатанное сообщение, сохраняем то, что успели напечатать
+        if (currentResponseText) {
+            currentChatHistory.push({role: 'assistant', content: currentResponseText});
+            currentResponseText = '';
+        }
+    }
+
     // Функция отправки сообщения
     function sendMessage() {
         const messageText = messageInput.value.trim();
-        if (!messageText) return;
+        if (!messageText || isGenerating) return;
 
         // Добавляем сообщение пользователя в чат
         addMessage('Вы', messageText, 'user');
@@ -535,6 +687,11 @@
         messageInput.value = '';
         messageInput.style.height = 'auto';
         sendBtn.disabled = true;
+
+        // Меняем кнопку на стоп
+        sendBtn.textContent = '■';
+        sendBtn.classList.add('stop-btn');
+        sendBtn.disabled = false;
 
         // Показываем индикатор набора текста
         showTypingIndicator();
@@ -556,10 +713,40 @@
         senderElement.textContent = sender;
 
         const textElement = document.createElement('div');
+        textElement.classList.add('message-text');
         textElement.textContent = text;
 
         messageElement.appendChild(senderElement);
         messageElement.appendChild(textElement);
+
+        // Добавляем кнопку копирования только для сообщений бота
+        if (type === 'bot') {
+            const messageFooter = document.createElement('div');
+            messageFooter.classList.add('message-footer');
+
+            const copyButton = document.createElement('button');
+            copyButton.classList.add('copy-btn');
+            copyButton.title = 'Копировать сообщение';
+
+            const copyIcon = document.createElement('img');
+            copyIcon.src = 'https://img.icons8.com/material-rounded/24/FFFFFF/copy.png';
+            copyIcon.alt = 'Копировать';
+            copyIcon.classList.add('copy-icon');
+
+            copyButton.appendChild(copyIcon);
+
+            copyButton.addEventListener('click', () => {
+                copyToClipboard(text);
+                copyButton.classList.add('copied');
+
+                setTimeout(() => {
+                    copyButton.classList.remove('copied');
+                }, 2000);
+            });
+
+            messageFooter.appendChild(copyButton);
+            messageElement.appendChild(messageFooter);
+        }
 
         chatMessages.appendChild(messageElement);
         chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -607,6 +794,7 @@
     // Функция отправки запроса к AI
     async function sendToAI(message) {
         const selectedModel = modelSelect.value;
+        isGenerating = true;
 
         try {
             // 👉 Берём ключ из Supabase
@@ -641,16 +829,23 @@
 
             if (data.choices && data.choices.length > 0) {
                 const aiResponse = data.choices[0].message.content;
-                typeMessage('OlmaGPT', aiResponse);
-                currentChatHistory.push({role: 'assistant', content: aiResponse});
+                // Форматируем текст перед отображением
+                const formattedResponse = formatText(aiResponse);
+                typeMessage('OlmaGPT', formattedResponse);
             } else {
                 throw new Error('Некорректный ответ от API');
             }
 
         } catch (error) {
             hideTypingIndicator();
+            isGenerating = false;
             console.error('Ошибка при обращении к API:', error);
             addMessage('OlmaGPT', 'Ошибка при обращении к AI. Проверь Supabase или API ключ.', 'bot');
+
+            // Возвращаем кнопку в исходное состояние
+            sendBtn.textContent = '➤';
+            sendBtn.classList.remove('stop-btn');
+            sendBtn.disabled = messageInput.value.trim() === '';
         }
     }
 
@@ -665,6 +860,7 @@
         senderElement.textContent = sender;
 
         const textElement = document.createElement('div');
+        textElement.classList.add('message-text');
         textElement.textContent = '';
 
         messageElement.appendChild(senderElement);
@@ -674,13 +870,54 @@
 
         let index = 0;
         const typingSpeed = 30; // мс между символами
+        currentResponseText = text;
 
         function typeCharacter() {
-            if (index < text.length) {
+            if (index < text.length && isGenerating) {
                 textElement.textContent += text.charAt(index);
                 index++;
                 chatMessages.scrollTop = chatMessages.scrollHeight;
-                setTimeout(typeCharacter, typingSpeed);
+                currentTypingAnimation = setTimeout(typeCharacter, typingSpeed);
+            } else {
+                // Завершение печати
+                if (index >= text.length) {
+                    currentChatHistory.push({role: 'assistant', content: text});
+                    currentResponseText = '';
+
+                    // Добавляем кнопку копирования после завершения печати
+                    const messageFooter = document.createElement('div');
+                    messageFooter.classList.add('message-footer');
+
+                    const copyButton = document.createElement('button');
+                    copyButton.classList.add('copy-btn');
+                    copyButton.title = 'Копировать сообщение';
+
+                    const copyIcon = document.createElement('img');
+                    copyIcon.src = 'https://img.icons8.com/material-rounded/24/FFFFFF/copy.png';
+                    copyIcon.alt = 'Копировать';
+                    copyIcon.classList.add('copy-icon');
+
+                    copyButton.appendChild(copyIcon);
+
+                    copyButton.addEventListener('click', () => {
+                        copyToClipboard(text);
+                        copyButton.classList.add('copied');
+
+                        setTimeout(() => {
+                            copyButton.classList.remove('copied');
+                        }, 2000);
+                    });
+
+                    messageFooter.appendChild(copyButton);
+                    messageElement.appendChild(messageFooter);
+                }
+
+                // Возвращаем кнопку в исходное состояние
+                sendBtn.textContent = '➤';
+                sendBtn.classList.remove('stop-btn');
+                sendBtn.disabled = messageInput.value.trim() === '';
+                isGenerating = false;
+                currentTypingAnimation = null;
             }
         }
 
@@ -691,7 +928,7 @@
     window.addEventListener('DOMContentLoaded', () => {
         // Добавляем первое сообщение от бота, если чат пустой
         if (chatMessages.children.length === 0) {
-            addMessage('OlmaGPTOlmaGPT', 'Привет! Я ваш AI помощник. Чем могу помочь?', 'bot');
+            addMessage('OlmaGPT', 'Привет! Я ваш AI помощник. Чем могу помочь?', 'bot');
         }
     });
 </script>
